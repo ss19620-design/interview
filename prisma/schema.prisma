@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ResearchProject {
+  id           String              @id @default(cuid())
+  name         String
+  description  String
+  introScript  String
+  consentText  String
+  closingScript String
+  maxFollowUps Int                 @default(1)
+  createdAt    DateTime            @default(now())
+
+  questions    InterviewQuestion[]
+  sessions     InterviewSession[]
+}
+
+model InterviewQuestion {
+  id         String           @id @default(cuid())
+  projectId  String
+  orderIndex Int
+  text       String
+
+  project    ResearchProject  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  responses  InterviewResponse[]
+
+  @@unique([projectId, orderIndex])
+  @@index([projectId])
+}
+
+model InterviewSession {
+  id          String             @id @default(cuid())
+  projectId   String
+  publicToken String             @unique
+  consented   Boolean            @default(false)
+  consentedAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  project     ResearchProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  responses   InterviewResponse[]
+
+  @@index([projectId])
+}
+
+model InterviewResponse {
+  id            String            @id @default(cuid())
+  sessionId     String
+  questionId    String?
+  questionText  String
+  transcript    String
+  followUpCount Int               @default(0)
+  createdAt     DateTime          @default(now())
+
+  session       InterviewSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question      InterviewQuestion? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([questionId])
+}
+

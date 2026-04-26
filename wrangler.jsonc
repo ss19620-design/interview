@@ -1,0 +1,13 @@
+// Wrangler configuration for Cloudflare Workers deployment
+{
+  "name": "interviewbot",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "interviewbot-db",
+      "database_id": "dbe3bdde-6d93-4e33-a523-5080c5c5ec9a"
+    }
+  ]
+}
