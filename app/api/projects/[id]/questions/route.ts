@@ -24,27 +24,26 @@ export async function PUT(
   const keepIds = new Set(normalized.map((q) => q.id).filter(Boolean) as string[]);
   const toDelete = existing.filter((q) => !keepIds.has(q.id)).map((q) => q.id);
 
-  await db.$transaction(async (tx) => {
-    if (toDelete.length) {
-      await tx.interviewQuestion.deleteMany({
-        where: { id: { in: toDelete }, projectId },
+  // D1 doesn't support interactive transactions, so run sequentially
+  if (toDelete.length) {
+    await db.interviewQuestion.deleteMany({
+      where: { id: { in: toDelete }, projectId },
+    });
+  }
+
+  for (let i = 0; i < normalized.length; i++) {
+    const q = normalized[i];
+    if (q.id) {
+      await db.interviewQuestion.update({
+        where: { id: q.id },
+        data: { text: q.text, orderIndex: i },
+      });
+    } else {
+      await db.interviewQuestion.create({
+        data: { projectId, text: q.text, orderIndex: i },
       });
     }
-
-    for (let i = 0; i < normalized.length; i++) {
-      const q = normalized[i];
-      if (q.id) {
-        await tx.interviewQuestion.update({
-          where: { id: q.id },
-          data: { text: q.text, orderIndex: i },
-        });
-      } else {
-        await tx.interviewQuestion.create({
-          data: { projectId, text: q.text, orderIndex: i },
-        });
-      }
-    }
-  });
+  }
 
   const project = await db.researchProject.findUnique({
     where: { id: projectId },
