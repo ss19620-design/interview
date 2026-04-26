@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/prisma";
+import { getDb, schema } from "@/lib/db";
+import { eq, asc } from "drizzle-orm";
 
 export async function GET(
   _req: Request,
@@ -7,48 +8,19 @@ export async function GET(
 ) {
   const { token } = await params;
   const db = await getDb();
-  const session = await db.interviewSession.findUnique({
-    where: { publicToken: token },
-    include: {
-      project: {
-        include: { questions: { orderBy: { orderIndex: "asc" } } },
-      },
-      responses: { orderBy: { createdAt: "asc" } },
-    },
-  });
 
+  const [session] = await db.select().from(schema.interviewSessions).where(eq(schema.interviewSessions.publicToken, token));
   if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const [project] = await db.select().from(schema.researchProjects).where(eq(schema.researchProjects.id, session.projectId));
+  const questions = await db.select().from(schema.interviewQuestions).where(eq(schema.interviewQuestions.projectId, session.projectId)).orderBy(asc(schema.interviewQuestions.orderIndex));
+  const responses = await db.select().from(schema.interviewResponses).where(eq(schema.interviewResponses.sessionId, session.id)).orderBy(asc(schema.interviewResponses.createdAt));
 
   return NextResponse.json({
     session: {
-      id: session.id,
-      publicToken: session.publicToken,
-      consented: session.consented,
-      consentedAt: session.consentedAt,
-      startedAt: session.startedAt,
-      completedAt: session.completedAt,
-      project: {
-        id: session.project.id,
-        name: session.project.name,
-        description: session.project.description,
-        consentText: session.project.consentText,
-        introScript: session.project.introScript,
-        closingScript: session.project.closingScript,
-        maxFollowUps: session.project.maxFollowUps,
-        questions: session.project.questions.map((q) => ({
-          id: q.id,
-          orderIndex: q.orderIndex,
-          text: q.text,
-        })),
-      },
-      responses: session.responses.map((r) => ({
-        id: r.id,
-        questionId: r.questionId,
-        questionText: r.questionText,
-        transcript: r.transcript,
-        followUpCount: r.followUpCount,
-        createdAt: r.createdAt,
-      })),
+      ...session,
+      project: { ...project, questions },
+      responses,
     },
   });
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getDb } from "@/lib/prisma";
+import { getDb, schema } from "@/lib/db";
+import { eq, asc, desc } from "drizzle-orm";
 import { AppShell } from "@/app/_components/AppShell";
 import { ProjectEditor } from "./projectEditor";
 import { CreateSessionButton } from "./createSessionButton";
@@ -12,13 +13,12 @@ export default async function ProjectPage(props: {
   const { session: sessionId } = await props.searchParams;
 
   const db = await getDb();
-  const project = await db.researchProject.findUnique({
-    where: { id },
-    include: {
-      questions: { orderBy: { orderIndex: "asc" } },
-      sessions: { orderBy: { startedAt: "desc" } },
-    },
-  });
+
+  const [project] = await db
+    .select()
+    .from(schema.researchProjects)
+    .where(eq(schema.researchProjects.id, id))
+    .limit(1);
 
   if (!project) {
     return (
@@ -33,12 +33,37 @@ export default async function ProjectPage(props: {
     );
   }
 
-  const selectedSession = sessionId
-    ? await db.interviewSession.findUnique({
-        where: { id: sessionId },
-        include: { responses: { orderBy: { createdAt: "asc" } } },
-      })
-    : null;
+  const questions = await db
+    .select()
+    .from(schema.interviewQuestions)
+    .where(eq(schema.interviewQuestions.projectId, id))
+    .orderBy(asc(schema.interviewQuestions.orderIndex));
+
+  const sessions = await db
+    .select()
+    .from(schema.interviewSessions)
+    .where(eq(schema.interviewSessions.projectId, id))
+    .orderBy(desc(schema.interviewSessions.startedAt));
+
+  let selectedSession: (typeof sessions)[number] | null = null;
+  let selectedResponses: (typeof schema.interviewResponses.$inferSelect)[] = [];
+
+  if (sessionId) {
+    const [found] = await db
+      .select()
+      .from(schema.interviewSessions)
+      .where(eq(schema.interviewSessions.id, sessionId))
+      .limit(1);
+
+    if (found) {
+      selectedSession = found;
+      selectedResponses = await db
+        .select()
+        .from(schema.interviewResponses)
+        .where(eq(schema.interviewResponses.sessionId, sessionId))
+        .orderBy(asc(schema.interviewResponses.createdAt));
+    }
+  }
 
   return (
     <AppShell title={project.name}>
@@ -53,7 +78,7 @@ export default async function ProjectPage(props: {
               introScript: project.introScript,
               closingScript: project.closingScript,
               maxFollowUps: project.maxFollowUps,
-              questions: project.questions,
+              questions,
             }}
           />
         </div>
@@ -72,7 +97,7 @@ export default async function ProjectPage(props: {
             <CreateSessionButton projectId={project.id} />
 
             <div className="mt-5 space-y-3">
-              {project.sessions.map((s) => (
+              {sessions.map((s) => (
                 <Link
                   key={s.id}
                   href={`/projects/${project.id}?session=${s.id}`}
@@ -83,14 +108,14 @@ export default async function ProjectPage(props: {
                       {s.consented ? "Consented" : "Not consented"}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {s.startedAt ? s.startedAt.toLocaleString() : "—"}
+                      {s.startedAt ? new Date(s.startedAt).toLocaleString() : "—"}
                     </div>
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">ID: {s.id}</div>
                 </Link>
               ))}
 
-              {project.sessions.length === 0 ? (
+              {sessions.length === 0 ? (
                 <div className="rounded-xl border border-border bg-secondary/40 p-6 text-sm text-muted-foreground shadow-sm">
                   No sessions yet. Generate a link to start collecting interviews.
                 </div>
@@ -128,7 +153,7 @@ export default async function ProjectPage(props: {
               </div>
 
               <div className="mt-5 space-y-4">
-                {selectedSession.responses.map((r, idx) => (
+                {selectedResponses.map((r, idx) => (
                   <div key={r.id} className="rounded-xl border border-border p-5 shadow-sm">
                     <div className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</div>
                     <div className="mt-1 text-sm font-medium text-foreground">{r.questionText}</div>
@@ -139,7 +164,7 @@ export default async function ProjectPage(props: {
                   </div>
                 ))}
 
-                {selectedSession.responses.length === 0 ? (
+                {selectedResponses.length === 0 ? (
                   <div className="rounded-xl border border-border bg-secondary/40 p-6 text-sm text-muted-foreground shadow-sm">
                     No responses yet.
                   </div>

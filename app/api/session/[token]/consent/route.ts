@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/prisma";
+import { getDb, schema } from "@/lib/db";
+import { eq } from "drizzle-orm";
 
 export async function POST(
   _req: Request,
@@ -7,14 +8,11 @@ export async function POST(
 ) {
   const { token } = await params;
   const db = await getDb();
-  const session = await db.interviewSession.update({
-    where: { publicToken: token },
-    data: {
-      consented: true,
-      consentedAt: new Date(),
-      startedAt: new Date(),
-    },
-  });
+  const now = new Date().toISOString();
+  const [session] = await db.update(schema.interviewSessions)
+    .set({ consented: true, consentedAt: now, startedAt: now })
+    .where(eq(schema.interviewSessions.publicToken, token))
+    .returning();
 
   return NextResponse.json({ session });
 }

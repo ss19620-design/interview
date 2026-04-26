@@ -1,4 +1,5 @@
-import { getDb } from "@/lib/prisma";
+import { getDb, schema } from "@/lib/db";
+import { eq, asc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +12,26 @@ export async function GET(
   if (!id) return new Response("Not found", { status: 404 });
 
   const db = await getDb();
-  const session = await db.interviewSession.findUnique({
-    where: { id },
-    include: {
-      project: true,
-      responses: { orderBy: { createdAt: "asc" } },
-    },
-  });
+
+  const [session] = await db
+    .select()
+    .from(schema.interviewSessions)
+    .where(eq(schema.interviewSessions.id, id))
+    .limit(1);
 
   if (!session) return new Response("Not found", { status: 404 });
+
+  const [project] = await db
+    .select()
+    .from(schema.researchProjects)
+    .where(eq(schema.researchProjects.id, session.projectId))
+    .limit(1);
+
+  const responses = await db
+    .select()
+    .from(schema.interviewResponses)
+    .where(eq(schema.interviewResponses.sessionId, session.id))
+    .orderBy(asc(schema.interviewResponses.createdAt));
 
   const payload = {
     session: {
@@ -32,16 +44,16 @@ export async function GET(
       completedAt: session.completedAt,
     },
     project: {
-      id: session.project.id,
-      name: session.project.name,
-      description: session.project.description,
-      introScript: session.project.introScript,
-      consentText: session.project.consentText,
-      closingScript: session.project.closingScript,
-      maxFollowUps: session.project.maxFollowUps,
-      createdAt: session.project.createdAt,
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      introScript: project.introScript,
+      consentText: project.consentText,
+      closingScript: project.closingScript,
+      maxFollowUps: project.maxFollowUps,
+      createdAt: project.createdAt,
     },
-    responses: session.responses.map((r) => ({
+    responses: responses.map((r) => ({
       id: r.id,
       questionId: r.questionId,
       questionText: r.questionText,

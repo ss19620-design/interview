@@ -1,18 +1,43 @@
 import Link from "next/link";
-import { getDb } from "@/lib/prisma";
+import { getDb, schema } from "@/lib/db";
+import { desc, eq, count } from "drizzle-orm";
 import { AppShell } from "@/app/_components/AppShell";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const db = await getDb();
-  const projects = await db.researchProject.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      sessions: { orderBy: { startedAt: "desc" } },
-      _count: { select: { questions: true, sessions: true } },
-    },
-  });
+
+  const allProjects = await db
+    .select()
+    .from(schema.researchProjects)
+    .orderBy(desc(schema.researchProjects.createdAt));
+
+  const projects = await Promise.all(
+    allProjects.map(async (p) => {
+      const [qCount] = await db
+        .select({ value: count() })
+        .from(schema.interviewQuestions)
+        .where(eq(schema.interviewQuestions.projectId, p.id));
+
+      const [sCount] = await db
+        .select({ value: count() })
+        .from(schema.interviewSessions)
+        .where(eq(schema.interviewSessions.projectId, p.id));
+
+      const sessions = await db
+        .select()
+        .from(schema.interviewSessions)
+        .where(eq(schema.interviewSessions.projectId, p.id))
+        .orderBy(desc(schema.interviewSessions.startedAt));
+
+      return {
+        ...p,
+        _count: { questions: qCount.value, sessions: sCount.value },
+        sessions,
+      };
+    }),
+  );
 
   return (
     <AppShell title="Dashboard">
@@ -53,7 +78,7 @@ export default async function DashboardPage() {
                     </span>
                     <span className="rounded-md bg-secondary px-3 py-1">
                       Last activity:{" "}
-                      {p.sessions[0]?.startedAt ? p.sessions[0].startedAt.toLocaleDateString() : "—"}
+                      {p.sessions[0]?.startedAt ? new Date(p.sessions[0].startedAt).toLocaleDateString() : "—"}
                     </span>
                   </div>
                 </div>
@@ -72,7 +97,7 @@ export default async function DashboardPage() {
                     {p.sessions.slice(0, 3).map((s) => (
                       <div key={s.id} className="flex items-center justify-between gap-3">
                         <div className="text-sm text-muted-foreground">
-                          {s.startedAt ? s.startedAt.toLocaleString() : "Not started"}
+                          {s.startedAt ? new Date(s.startedAt).toLocaleString() : "Not started"}
                         </div>
                         <Link
                           href={`/projects/${p.id}?session=${s.id}`}

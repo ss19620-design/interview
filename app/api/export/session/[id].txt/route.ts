@@ -1,4 +1,5 @@
-import { getDb } from "@/lib/prisma";
+import { getDb, schema } from "@/lib/db";
+import { eq, asc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -11,22 +12,33 @@ export async function GET(
   if (!id) return new Response("Not found", { status: 404 });
 
   const db = await getDb();
-  const session = await db.interviewSession.findUnique({
-    where: { id },
-    include: {
-      project: true,
-      responses: { orderBy: { createdAt: "asc" } },
-    },
-  });
+
+  const [session] = await db
+    .select()
+    .from(schema.interviewSessions)
+    .where(eq(schema.interviewSessions.id, id))
+    .limit(1);
 
   if (!session) return new Response("Not found", { status: 404 });
 
+  const [project] = await db
+    .select()
+    .from(schema.researchProjects)
+    .where(eq(schema.researchProjects.id, session.projectId))
+    .limit(1);
+
+  const responses = await db
+    .select()
+    .from(schema.interviewResponses)
+    .where(eq(schema.interviewResponses.sessionId, session.id))
+    .orderBy(asc(schema.interviewResponses.createdAt));
+
   const lines: string[] = [];
   lines.push(`Interview Session: ${session.id}`);
-  lines.push(`Project: ${session.project.name}`);
+  lines.push(`Project: ${project.name}`);
   lines.push("");
 
-  session.responses.forEach((r, idx) => {
+  responses.forEach((r, idx) => {
     lines.push(`Question ${idx + 1}:`);
     lines.push(r.questionText);
     lines.push("");

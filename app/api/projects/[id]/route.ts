@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/prisma";
+import { getDb, schema } from "@/lib/db";
+import { eq, asc, desc } from "drizzle-orm";
 
 export async function GET(
   _req: Request,
@@ -7,15 +8,13 @@ export async function GET(
 ) {
   const { id } = await params;
   const db = await getDb();
-  const project = await db.researchProject.findUnique({
-    where: { id },
-    include: {
-      questions: { orderBy: { orderIndex: "asc" } },
-      sessions: { orderBy: { startedAt: "desc" } },
-    },
-  });
+  const [project] = await db.select().from(schema.researchProjects).where(eq(schema.researchProjects.id, id));
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ project });
+
+  const questions = await db.select().from(schema.interviewQuestions).where(eq(schema.interviewQuestions.projectId, id)).orderBy(asc(schema.interviewQuestions.orderIndex));
+  const sessions = await db.select().from(schema.interviewSessions).where(eq(schema.interviewSessions.projectId, id)).orderBy(desc(schema.interviewSessions.startedAt));
+
+  return NextResponse.json({ project: { ...project, questions, sessions } });
 }
 
 export async function PATCH(
@@ -24,29 +23,20 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = (await req.json()) as Partial<{
-    name: string;
-    description: string;
-    consentText: string;
-    introScript: string;
-    closingScript: string;
-    maxFollowUps: number;
+    name: string; description: string; consentText: string;
+    introScript: string; closingScript: string; maxFollowUps: number;
   }>;
 
-  const db = await getDb();
-  const project = await db.researchProject.update({
-    where: { id },
-    data: {
-      ...(typeof body.name === "string" ? { name: body.name.trim() } : {}),
-      ...(typeof body.description === "string" ? { description: body.description.trim() } : {}),
-      ...(typeof body.consentText === "string" ? { consentText: body.consentText } : {}),
-      ...(typeof body.introScript === "string" ? { introScript: body.introScript } : {}),
-      ...(typeof body.closingScript === "string" ? { closingScript: body.closingScript } : {}),
-      ...(typeof body.maxFollowUps === "number" && body.maxFollowUps >= 0
-        ? { maxFollowUps: body.maxFollowUps }
-        : {}),
-    },
-  });
+  const data: Record<string, unknown> = {};
+  if (typeof body.name === "string") data.name = body.name.trim();
+  if (typeof body.description === "string") data.description = body.description.trim();
+  if (typeof body.consentText === "string") data.consentText = body.consentText;
+  if (typeof body.introScript === "string") data.introScript = body.introScript;
+  if (typeof body.closingScript === "string") data.closingScript = body.closingScript;
+  if (typeof body.maxFollowUps === "number" && body.maxFollowUps >= 0) data.maxFollowUps = body.maxFollowUps;
 
+  const db = await getDb();
+  const [project] = await db.update(schema.researchProjects).set(data).where(eq(schema.researchProjects.id, id)).returning();
   return NextResponse.json({ project });
 }
 
@@ -56,6 +46,6 @@ export async function DELETE(
 ) {
   const { id } = await params;
   const db = await getDb();
-  await db.researchProject.delete({ where: { id } });
+  await db.delete(schema.researchProjects).where(eq(schema.researchProjects.id, id));
   return NextResponse.json({ ok: true });
 }
