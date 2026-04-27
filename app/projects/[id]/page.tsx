@@ -133,19 +133,19 @@ export default async function ProjectPage(props: {
                 <div className="flex flex-col items-end gap-2">
                   <a
                     className="text-sm font-medium text-foreground underline underline-offset-4"
-                    href={`/api/export/session/${selectedSession.id}.txt`}
+                    href={`/api/export/session/${selectedSession.id}/txt`}
                   >
                     Download TXT
                   </a>
                   <a
                     className="text-sm font-medium text-foreground underline underline-offset-4"
-                    href={`/api/export/session/${selectedSession.id}.csv`}
+                    href={`/api/export/session/${selectedSession.id}/csv`}
                   >
                     Download CSV
                   </a>
                   <a
                     className="text-sm font-medium text-foreground underline underline-offset-4"
-                    href={`/api/export/session/${selectedSession.id}.json`}
+                    href={`/api/export/session/${selectedSession.id}/json`}
                   >
                     Download JSON
                   </a>
