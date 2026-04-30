@@ -54,7 +54,7 @@ npx prisma migrate dev
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open `https://interviewbot.interviewbot.workers.dev/`.
 
 ## Usage
 
