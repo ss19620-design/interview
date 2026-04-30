@@ -56,6 +56,8 @@ npm run dev
 
 Open `https://interviewbot.interviewbot.workers.dev/`.
 
+[Click here to go to the dashboard](https://interviewbot.interviewbot.workers.dev/)
+
 ## Usage
 
 - Go to `/projects` to create a project and questions.
